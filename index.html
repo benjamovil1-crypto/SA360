@@ -912,20 +912,40 @@
             </div>
 
             <!-- Google Calendar -->
-            <div class="card card-accent-purple" style="cursor:pointer;" onclick="abrirSubvista('view-gcal')">
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div style="display:flex;align-items:center;gap:14px;">
-                        <div style="width:40px;height:40px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <i data-lucide="calendar-sync" style="width:20px;height:20px;color:var(--purple);"></i>
-                        </div>
-                        <div>
-                            <div style="font-weight:600;font-size:0.92rem;">Google Calendar</div>
-                            <div style="font-size:0.75rem;color:var(--text-mid);margin-top:2px;">Sincronizar actividades y recordatorios</div>
-                        </div>
+            <div class="card card-accent-purple">
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+                    <div style="width:40px;height:40px;background:var(--purple-dim);border:1px solid var(--purple);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i data-lucide="calendar-sync" style="width:20px;height:20px;color:var(--purple);"></i>
                     </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div id="gcal-status-badge" style="font-family:var(--font-mono);font-size:0.58rem;padding:3px 8px;border-radius:6px;background:rgba(136,136,168,0.1);color:var(--text-dim);">NO CONECTADO</div>
-                        <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--text-dim);"></i>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:0.92rem;">Google Calendar</div>
+                        <div id="gcal-status-badge" style="font-family:var(--font-mono);font-size:0.62rem;padding:3px 8px;border-radius:6px;background:rgba(136,136,168,0.1);color:var(--text-dim);display:inline-block;margin-top:4px;">NO CONECTADO</div>
+                    </div>
+                </div>
+
+                <!-- Si NO conectado: mostrar campo Client ID -->
+                <div id="gcal-inline-config">
+                    <p style="font-size:0.8rem;color:var(--text-mid);margin-bottom:10px;line-height:1.5;">
+                        Pega aquí tu <b style="color:var(--purple);">Client ID</b> de Google Cloud para conectar.
+                        <span onclick="abrirSubvista('view-gcal')" style="color:var(--cyan);cursor:pointer;display:block;margin-top:3px;font-size:0.75rem;">¿Cómo obtenerlo? Ver guía →</span>
+                    </p>
+                    <input type="text" id="gcal-client-id-ajustes"
+                        placeholder="xxxxxxxx.apps.googleusercontent.com"
+                        style="font-size:0.78rem;margin-bottom:8px;">
+                    <button class="btn btn-purple" onclick="guardarClientIdAjustes()">
+                        <i data-lucide="save" style="width:16px;height:16px;"></i>GUARDAR Y CONECTAR
+                    </button>
+                </div>
+
+                <!-- Si YA conectado: mostrar botones de acción -->
+                <div id="gcal-inline-connected" style="display:none;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <button class="btn btn-green btn-sm" onclick="abrirSubvista('view-gcal')" style="padding:12px 8px;font-size:0.78rem;">
+                            <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>Sincronizar
+                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="desconectarGcal()" style="padding:12px 8px;font-size:0.78rem;">
+                            <i data-lucide="log-out" style="width:14px;height:14px;"></i>Desconectar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2105,6 +2125,18 @@ function renderGcalEstado() {
 }
 
 // ── GUARDAR CLIENT ID ────────────────────────────────────────────────
+function guardarClientIdAjustes() {
+    // Toma el valor del campo inline en Ajustes
+    const inp = document.getElementById('gcal-client-id-ajustes');
+    if(inp) {
+        const val = inp.value.trim();
+        // Copiar al campo original de view-gcal
+        const orig = document.getElementById('gcal-client-id');
+        if(orig) orig.value = val;
+        guardarClientId();
+    }
+}
+
 function guardarClientId() {
     const val = document.getElementById('gcal-client-id').value.trim();
     if(!val || !val.includes('.apps.googleusercontent.com')) {
@@ -2141,9 +2173,9 @@ function capturarTokenDeURL() {
         // Limpiar URL
         history.replaceState(null, '', window.location.pathname);
         showToast('✓ Cuenta Google conectada','success');
-        // Ir directo a la pestaña GCal
+        // Ir directo a Ajustes para mostrar estado conectado
         setTimeout(()=>{
-            cambiarTab('view-gcal', document.getElementById('nav-gcal'));
+            cambiarTab('view-ajustes', document.getElementById('nav-ajustes-ghost'));
         }, 300);
     }
 }
@@ -2328,18 +2360,22 @@ function abrirModalGuia() { abrirModal('modal-guia'); }
 
 // ── AJUSTES ──────────────────────────────────────────────────────────────────
 function initAjustesView() {
-    // Badge Google Calendar
+    // Badge Google Calendar + mostrar/ocultar secciones inline
     const badge = document.getElementById('gcal-status-badge');
-    if(badge) {
-        if(gcalToken) {
-            badge.textContent = 'CONECTADO';
-            badge.style.background = 'var(--green-dim)';
-            badge.style.color = 'var(--green)';
-        } else {
-            badge.textContent = 'NO CONECTADO';
-            badge.style.background = 'rgba(136,136,168,0.1)';
-            badge.style.color = 'var(--text-dim)';
-        }
+    const inlineConfig = document.getElementById('gcal-inline-config');
+    const inlineConnected = document.getElementById('gcal-inline-connected');
+    const clientIdAjustes = document.getElementById('gcal-client-id-ajustes');
+
+    if(gcalToken) {
+        if(badge) { badge.textContent = 'CONECTADO'; badge.style.background = 'var(--green-dim)'; badge.style.color = 'var(--green)'; }
+        if(inlineConfig) inlineConfig.style.display = 'none';
+        if(inlineConnected) inlineConnected.style.display = 'block';
+    } else {
+        if(badge) { badge.textContent = 'NO CONECTADO'; badge.style.background = 'rgba(136,136,168,0.1)'; badge.style.color = 'var(--text-dim)'; }
+        if(inlineConfig) inlineConfig.style.display = 'block';
+        if(inlineConnected) inlineConnected.style.display = 'none';
+        // Pre-rellenar con Client ID guardado si existe
+        if(clientIdAjustes && gcalClientId) clientIdAjustes.value = gcalClientId;
     }
     // Último respaldo
     const hist = JSON.parse(localStorage.getItem('super360_backup_hist')) || [];
@@ -2512,14 +2548,19 @@ function initSplash() {
         if(p >= 100) clearInterval(pctInterval);
     }, 35);
 
-    // Fade out después de 2.8s
+    // Fade out después de 2.5s
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         if(splash) {
             splash.classList.add('fade-out');
-            setTimeout(() => splash.classList.add('hidden'), 700);
+            setTimeout(() => {
+                splash.classList.add('hidden');
+                // Forzar re-render del home al terminar el splash
+                updateHome();
+                lucide.createIcons();
+            }, 600);
         }
-    }, 2800);
+    }, 2500);
 }
 
 window.onload = ()=>{
